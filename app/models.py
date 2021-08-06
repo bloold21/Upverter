@@ -27,6 +27,13 @@ class User(UserMixin, db.Model):
 
     about_me = db.Column(db.String(140))
     last_seen = db.Column(db.DateTime, default=datetime.utcnow)
+    message_sent = db.relationship('Message',
+                    foreign_keys='Message.sender_id',
+                    backref='author', lazy='dynamic')
+    message_received = db.relationship('Message',
+                    foreign_keys='Message.recipient_id',
+                    backref='recipient', lazy='dynamic')
+    last_message_read_time = db.Column(db.DateTime)
 
     def __repr__(self):
         return '<User %s>' %self.username
@@ -62,6 +69,11 @@ class User(UserMixin, db.Model):
         own = Post.query.filter_by(user_id=self.id)
         return followed.union(own).order_by(Post.timestamp.desc())
 
+    def new_message(self):
+        last_read_time = self.last_message_read_time or datetime(1900, 1, 1)
+        return Message.query.filter_by(recipient=self).filter(
+            Message.timestamp>last_read_time).count()
+
 
 class Post(SearchableMixin,db.Model):
     __searchable__ = ['body']
@@ -78,3 +90,14 @@ class Post(SearchableMixin,db.Model):
 @login.user_loader
 def load_user(id):
     return User.query.get(int(id))
+
+
+class Message(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    sender_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    recipient_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    body = db.Column(db.String(140))
+    timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)
+
+    def __repr__(self):
+        return '<Message %s>' %self.body
